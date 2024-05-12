@@ -1,7 +1,9 @@
 import React, { useState, useEffect,useRef } from "react";
-import { View, Text } from "react-native";
+import { View, Text, Button } from "react-native";
 import { GiftedChat, Bubble } from "react-native-gifted-chat";
 import io from "socket.io-client";
+import ImagePicker from 'react-native-image-picker';
+import { launchImageLibrary } from 'react-native-image-picker';
 
 const Chat = ({ route }) => {
   const { user, partner } = route.params;
@@ -24,13 +26,39 @@ const Chat = ({ route }) => {
   }, []);
 
   const onSend = (newMessages = []) => {
-    if (isMounted.current) {
-      setMessages((prevMessages) => GiftedChat.append(prevMessages, newMessages));
-      newMessages.forEach(message => {
-        socket.current.emit('send message', message.text);  // Send message text to the server
-      });
-    }
+    newMessages.forEach(message => {
+        if (message.image) {
+            socket.current.emit('send image', { image: message.image });
+        } else {
+            socket.current.emit('send message', message.text);
+        }
+    });
+    setMessages((prevMessages) => GiftedChat.append(prevMessages, newMessages));
+};
+
+const handleAddImage = () => {
+  const options = {
+      mediaType: 'photo',
+      quality: 1,
   };
+
+  launchImageLibrary(options, (response) => {
+    if (response.didCancel) {
+        console.log('User cancelled image picker');
+    } else if (response.errorCode) {
+        console.log('ImagePicker Error: ', response.errorMessage);
+    } else if (response.assets && response.assets.length > 0) {
+        const source = { uri: response.assets[0].uri };
+        const imageMessage = {
+            _id: Math.random().toString(36).substr(2, 9),
+            createdAt: new Date(),
+            user: { _id: 1 },
+            image: source.uri,
+        };
+        onSend([imageMessage]);
+    }
+});
+};
   // 말풍선 스타일을 조정하는 함수
   const renderBubble = (props) => {
     return (
@@ -72,12 +100,18 @@ const Chat = ({ route }) => {
   };
   
   return (
-    <GiftedChat
-      messages={messages}
-      onSend={onSend}
-      renderBubble={renderBubble} // 말풍선 스타일을 적용
-    />
-  );
+        <View style={{ flex: 1 }}>
+            <GiftedChat
+                messages={messages}
+                onSend={onSend}
+                renderBubble={renderBubble}
+                user={{
+                    _id: 1, // Static user ID for demo purposes
+                }}
+            />
+            <Button title="Add Image" onPress={handleAddImage} />
+        </View>
+    );
 };
 
 export default Chat;
